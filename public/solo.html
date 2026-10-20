@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game "Đại Đoàn Kết" — Solo</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;height:100vh;height:100dvh;background:radial-gradient(#1f5288,#0b1a2e);
+       color:#fff;font-family:system-ui,"Segoe UI",sans-serif;overflow:hidden}
+  .hide{display:none!important}
+  .screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+          gap:14px;padding:16px;text-align:center;overflow:auto}
+  button{font:inherit;cursor:pointer;border:0;border-radius:14px}
+  input{font:inherit;padding:10px;border-radius:10px;border:0;width:min(320px,100%)}
+  .big{background:#f5c542;color:#12345a;font-weight:800;
+       font-size:clamp(18px,3vw,28px);padding:12px 34px}
+
+  /* ----- Trang chào (giống index.html) ----- */
+  #join{text-align:center;padding:24px 16px}
+  #join .logo{width:120px;height:120px;object-fit:contain;display:block;margin:4px auto 6px;
+              filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))}
+  #join h1{margin:6px 0 8px;color:#fff;font-size:clamp(19px,3.4vw,25px);line-height:1.2}
+  #join .slogan{color:#FFFF00;font-size:clamp(18px,4vw,28px);line-height:1.4;
+                margin:10px 0 20px;font-weight:700}
+  #join .slogan b{color:#FFFF00;display:block;font-size:inherit;margin-top:4px;
+                  letter-spacing:0;font-weight:700}
+
+  /* ----- Layout bàn chơi ----- */
+  #app{height:100%;display:flex}
+  #wrap{flex:1;min-width:0;min-height:0;display:grid;place-items:center;padding:8px}
+  #board{position:relative;background:url(nen.webp) center/contain no-repeat}
+  #car{position:absolute;width:20%;transform:translate(-50%,-50%);
+       filter:drop-shadow(0 3px 4px #000a)}
+  #spin{position:absolute;left:50%;top:50%;width:19%;aspect-ratio:1;
+        transform:translate(-50%,-50%);border-radius:50%;background:#fff;color:#12345a;
+        font-weight:900;font-size:calc(var(--s,600px)*.035);animation:pulse 1.4s infinite}
+  #spin:disabled{animation:none;opacity:.6;cursor:not-allowed}
+  @keyframes pulse{50%{box-shadow:0 0 0 14px #f5c54266}}
+
+  /* ----- Cột bên phải ----- */
+  #side{width:28%;min-width:240px;padding:12px;display:flex;flex-direction:column;
+        gap:10px;overflow:auto}
+  #msg{font-size:clamp(16px,2vw,24px);font-weight:800;color:#f5c542;line-height:1.35}
+  #score{display:grid;gap:6px}
+  #score .p{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;
+            border-radius:10px;background:#ffffff1f;font-size:clamp(14px,1.8vw,22px)}
+  #score .p.on{background:#f5c542;color:#12345a;font-weight:800}
+
+  /* ----- Overlay câu hỏi ----- */
+  #ov{position:fixed;inset:0;background:#000b;display:grid;place-items:center;
+      padding:12px;z-index:9}
+  #card{width:min(94vw,900px);max-height:96vh;overflow:auto;background:#fff;color:#12345a;
+        border-radius:20px;text-align:center;padding-bottom:16px}
+  #card .hd{color:#fff;font-weight:800;padding:10px;font-size:clamp(16px,2.4vw,26px)}
+  #card h2{margin:16px;font-size:clamp(20px,3.4vw,38px)}
+  #opts{display:grid;gap:10px;padding:0 16px}
+  @media(min-width:700px){#opts{grid-template-columns:1fr 1fr}}
+  .opt{background:#e8f0f9;color:#12345a;font-size:clamp(16px,2.6vw,30px);
+       padding:14px;text-align:left}
+  .opt.ok{background:#2eb872;color:#fff}
+  .opt.bad{background:#e0453a;color:#fff}
+
+  @media(orientation:portrait){
+    #app{flex-direction:column}
+    #side{width:100%;min-width:0;max-height:34%}
+  }
+</style>
+</head>
+<body>
+
+<!-- Trang chào: giống index.html -->
+<div id="join" class="screen">
+  <img class="logo" src="icon.png" alt="Logo" onerror="this.style.display='none'">
+  <h1>Game "Đại Đoàn Kết"</h1>
+  <p class="slogan">NHIỆT LIỆT CHÀO MỪNG<b>NGÀY HỘI ĐẠI ĐOÀN KẾT TOÀN DÂN TỘC!</b></p>
+  <input id="nm" maxlength="14" placeholder="Nhập tên của bạn">
+  <button class="big" id="go">THAM GIA</button>
+</div>
+
+<!-- Màn chơi: cùng cấu trúc với index.html -->
+<div id="app" class="hide">
+  <div id="wrap">
+    <div id="board">
+      <img id="car" src="car.svg" alt="">
+      <button id="spin" disabled>QUAY!</button>
+    </div>
+  </div>
+  <div id="side">
+    <div id="msg"></div>
+    <div id="score"></div>
+  </div>
+</div>
+
+<div id="ov" class="hide"><div id="card"></div></div>
+
+<!-- Chỉ cần questions.js; không cần config.js/common.js/server -->
+<script src="questions.js"></script>
+<script>
+/* ============================================================
+   SOLO "ĐẠI ĐOÀN KẾT"
+   - 1 người chơi
+   - Logic & giao diện bám sát index.html (chế độ "all")
+   - Tự mô phỏng server: tự quay, tự chọn vùng, tự tính điểm
+   ============================================================ */
+const $  = s => document.querySelector(s);
+const Q  = window.QUESTIONS || {};
+const NM  = { bac: "MIỀN BẮC", trung: "MIỀN TRUNG", nam: "MIỀN NAM" };
+const COL = { bac: "#e0679a",  trung: "#e8872a",     nam: "#2d8fd0" };
+const PER = (window.CONFIG && (window.CONFIG.per || window.CONFIG.perTurn)) || 10;
+
+const esc  = s => String(s).replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuf = a => { a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+/* ---------- State ---------- */
+const me = "solo";
+let S = {
+  mode: "all",                 // như index.html
+  per: PER,
+  status: "playing",
+  players: [],
+  pl: {}                       // pl[me] = { region, n, ok, done, spinId }
+};
+let quizOn = false;            // đang trong màn hỏi đáp
+let doneId = 0;                // chống gọi quiz lặp lại cho 1 lượt
+let decks  = {};               // bộ câu hỏi theo vùng
+let busy   = false;            // đang quay
+let ang    = 0;                // góc hiện tại của xe
+let spinId = 0;                // id tăng dần cho mỗi lần quay
+
+/* ---------- Vào game ---------- */
+$("#go").onclick = () => {
+  const name = $("#nm").value.trim() || "Bạn";
+  S.players = [{ id: me, name, score: 0 }];
+  enter();
+};
+
+function enter() {
+  $("#join").classList.add("hide");
+  $("#app").classList.remove("hide");
+  fit();
+  place(ang);
+  onS();
+}
+
+/* ---------- Co giãn bàn ---------- */
+function fit() {
+  const w = $("#wrap").getBoundingClientRect();
+  const s = Math.max(120, Math.min(w.width, w.height) - 16);
+  const b = $("#board");
+  b.style.width = b.style.height = s + "px";
+  b.style.setProperty("--s", s + "px");
+}
+addEventListener("resize", fit);
+
+/* Đặt xe theo góc (0 = đỉnh) */
+function place(a) {
+  const r = 46.5, t = a * Math.PI / 180;
+  const car = $("#car");
+  car.style.left = (50 + r * Math.sin(t)) + "%";
+  car.style.top  = (50 - r * Math.cos(t)) + "%";
+  car.style.transform = `translate(-50%,-50%) rotate(${a}deg)`;
+}
+
+/* ---------- Render ---------- */
+function renderScore() {
+  $("#score").innerHTML = S.players.map(p =>
+    `<div class="p on"><span>${esc(p.name)}</span><b>${p.score}</b></div>`
+  ).join("");
+}
+
+function onS() {
+  renderScore();
+  const o = S.pl[me];
+
+  // Thông điệp — giống hệt index.html
+  if (S.status === "ended") {
+    $("#msg").textContent = "🏆 Kết thúc! Điểm của bạn: " + S.players[0].score;
+  } else if (!o) {
+    $("#msg").textContent = "🎯 Bấm vào vòng tròn giữa để QUAY";
+  } else if (!o.done) {
+    $("#msg").textContent = "🚗 Xe đang chạy…";
+  } else if (o.n < S.per) {
+    $("#msg").textContent = "📝 Đang trả lời câu hỏi…";
+  } else {
+    $("#msg").textContent = `Bạn đúng ${o.ok}/${S.per} câu. Bấm QUAY để tiếp tục…`;
+  }
+
+  // Nút QUAY bật khi: chưa có lượt dở và không đang quay
+  $("#spin").disabled = !(S.status === "playing" && !o) || busy;
+
+  // Vào phần hỏi đáp khi xe đã dừng (giống index: spinDone + chưa hỏi)
+  if (o && o.done && o.n < S.per && !quizOn && doneId !== o.spinId) {
+    quiz({ id: o.spinId, region: o.region, n: o.n, banner: o.n === 0 });
+  }
+}
+
+/* ---------- Quay ---------- */
+$("#spin").onclick = () => {
+  if (busy || S.pl[me] || S.status !== "playing") return;
+
+  busy = true;
+  $("#spin").disabled = true;
+
+  // Chọn vùng ngẫu nhiên (mô phỏng server "spinme" trong chế độ all)
+  const regions = ["bac", "trung", "nam"];
+  const region  = regions[Math.random() * 3 | 0];
+  const target  = regionAngle(region);
+
+  spinId++;
+  S.pl[me] = { region, n: 0, ok: 0, done: false, spinId };
+
+  // Animation 6s ease-out cubic (giống index)
+  const a0    = ang;
+  const delta = ((target - a0) % 360 + 360) % 360 + 360 * (4 + (Math.random() * 3 | 0));
+  const T     = 6000;
+  const t0    = performance.now();
+
+  (function frame(now) {
+    const t = Math.min(1, (now - t0) / T);
+    ang = a0 + delta * (1 - Math.pow(1 - t, 3));
+    place(ang);
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      ang = ((ang % 360) + 360) % 360;
+      busy = false;
+      S.pl[me].done = true;     // đánh dấu xe đã dừng
+      onS();                    // → sẽ kích hoạt quiz()
+    }
+  })(t0);
+
+  onS();
+};
+
+/* Trả về góc đích cho vùng (khớp cách chia 3 cung của bàn) */
+function regionAngle(region) {
+  if (region === "bac")   return ((Math.random() * 40 - 20) + 360) % 360;  // quanh 0
+  if (region === "trung") return 120 + (Math.random() * 40 - 20);          // quanh 120
+  return 240 + (Math.random() * 40 - 20);                                  // quanh 240
+}
+
+/* ---------- Hỏi đáp — bám sát index.html ---------- */
+function quiz(t) {
+  quizOn = true;
+  let n = t.n;
+  const r = t.region, per = S.per;
+
+  function ask() {
+    // Hết số câu cho lượt này → đóng overlay, xoá tiến trình, mở khoá QUAY
+    if (n >= per) {
+      doneId = t.id;
+      quizOn = false;
+      $("#ov").classList.add("hide");
+      setTimeout(() => { delete S.pl[me]; onS(); }, 400);
+      return;
+    }
+
+    // Bộ câu hỏi theo vùng + câu chung (như index: [...Q[r],...Q.chung])
+    if (!(decks[r] && decks[r].length)) {
+      decks[r] = shuf([...(Q[r] || []), ...(Q.chung || [])]);
+    }
+    const q    = decks[r].pop();
+    const opts = shuf(q.a.map((x, i) => ({ x, i })));
+
+    $("#card").innerHTML =
+      `<div class="hd" style="background:${COL[r]}">${NM[r]} · Câu ${n + 1}/${per}</div>` +
+      `<h2>${esc(q.q)}</h2>` +
+      `<div id="opts">` +
+        opts.map((y, k) =>
+          `<button class="opt" data-i="${y.i}">${"ABCD"[k]}. ${esc(y.x)}</button>`
+        ).join("") +
+      `</div>`;
+    $("#ov").classList.remove("hide");
+
+    const bs = [...document.querySelectorAll(".opt")];
+    bs.forEach(b => b.onclick = () => {
+      const good = +b.dataset.i === q.c;
+      bs.forEach(x => {
+        x.onclick = null;
+        if (+x.dataset.i === q.c) x.classList.add("ok");
+      });
+      if (!good) b.classList.add("bad");
+
+      n++;
+      if (good) S.players[0].score++;
+      const cur = S.pl[me];
+      if (cur) {
+        if (good) cur.ok++;
+        cur.n = n;
+      }
+      renderScore();
+
+      setTimeout(ask, 1300);
+    });
+  }
+
+  // Banner kết quả quay — như index.html (banner:1 cho câu đầu của lượt)
+  if (t.banner) {
+    $("#card").innerHTML =
+      `<div class="hd" style="background:${COL[r]}">Kết quả quay</div>` +
+      `<img src="${r}.webp" alt=""
+            style="display:block;margin:0 auto 8px;max-height:200px;max-width:100%"
+            onerror="this.remove()">` +
+      `<h2>Bạn đã đến<br><span style="color:${COL[r]}">${NM[r]}</span> 🎉</h2>`;
+    $("#ov").classList.remove("hide");
+    setTimeout(ask, 4500);
+  } else {
+    ask();
+  }
+}
+</script>
+</body>
+</html>
