@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đại đoàn kết - Admin</title><link rel="stylesheet" href="style.css">
+<style>
+#start{width:min(560px,100%);font-size:clamp(24px,5vw,40px);padding:26px 20px;border-radius:22px;box-shadow:0 8px 0 #b8901e;transition:.2s}
+#start:active{transform:translateY(6px);box-shadow:0 2px 0 #b8901e}
+#start.busy{opacity:.7}
+#start.done{background:#2eb872;color:#fff;box-shadow:0 8px 0 #1b7a4b;animation:pop .6s}
+#start.end{background:#8a96a8;color:#fff;box-shadow:0 8px 0 #5d6776}
+@keyframes pop{0%{transform:scale(.9)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+#toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-140%);background:#2eb872;color:#fff;font-weight:800;font-size:20px;padding:14px 24px;border-radius:14px;z-index:20;transition:.35s;box-shadow:0 6px 20px #0008;max-width:92vw}
+#toast.show{transform:translate(-50%,0)}#toast.err{background:#e0453a}
+#flash{position:fixed;inset:0;background:#2eb872;opacity:0;pointer-events:none;z-index:15}
+#flash.go{animation:fl .8s}@keyframes fl{0%{opacity:.55}100%{opacity:0}}
+select:disabled{opacity:.6}
+#pw{width:min(340px,70vw);font-size:26px;text-align:center;letter-spacing:3px;border:3px solid #f5c542;background:#fff;color:#12345a}
+#eye{background:#ffffff26;color:#fff;font-size:26px;padding:8px 14px}
+#lerr{min-height:30px;font-weight:800;font-size:20px;color:#ff8a80}
+#out{background:#ffffff26;color:#fff;font-size:16px;padding:8px 16px}
+#plist{width:min(520px,100%)}
+.pl{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#ffffff1a;border-radius:12px;padding:6px 10px;margin:6px 0}
+.pl .nm{font-size:20px;text-align:left}
+.pl .meta{opacity:.85;font-size:14px}
+.pl button{font-size:18px;padding:8px 14px;border-radius:12px}
+.pl .empty{opacity:.7;font-size:18px;padding:8px}
+</style></head><body style="overflow:auto">
+<div id="toast"></div><div id="flash"></div>
+<div id="login" class="screen"><h1>🔒 ĐĂNG NHẬP ADMIN</h1>
+<div style="font-size:20px">Nhập mã admin để điều khiển trò chơi</div>
+<div class="row"><input id="pw" type="password" placeholder="Mã admin" autocomplete="off"><button id="eye" title="Hiện/ẩn mã">👁</button></div>
+<div id="lerr"></div><button class="big" id="lgo">🔓 VÀO</button></div>
+
+<div id="panel" class="screen hide"><h1>⚙️ ĐIỀU KHIỂN</h1><button id="out">🚪 Đăng xuất</button>
+<div class="row">Chế độ: <select id="mode"><option value="all">Tất cả cùng chơi 1 lần</option><option value="seq">Lần lượt từng người</option></select></div>
+<label class="row"><input type="checkbox" id="auto" checked style="width:28px;height:28px"> Tự động chuyển lượt</label>
+<button class="big" id="start">▶ BẮT ĐẦU TRÒ CHƠI</button>
+<div class="row"><button class="big" id="turn">🎲 TẠO LƯỢT</button><button class="big" id="skip">⏭ BỎ LƯỢT</button><button class="big red" id="reset">🗑 XOÁ TẤT CẢ</button></div>
+<div id="info" style="font-size:20px"></div>
+<h2 style="margin:16px 0 6px;font-size:22px">👥 Danh sách người chơi</h2>
+<div id="plist"></div>
+<div id="score" style="width:min(520px,100%)"></div></div>
+
+<script src="common.js"></script>
+<script>
+let K="";
+function toast(m,bad){const t=$("#toast");t.textContent=m;t.className="show"+(bad?" err":"");clearTimeout(toast.h);toast.h=setTimeout(()=>t.className="",2800)}
+async function act(a,x={}){try{const r=await api(a,{k:K,...x});S=r;if(r.err)toast(r.err,1);show();return r}catch(e){toast("Lỗi kết nối, thử lại",1)}}
+
+$("#start").onclick=async()=>{const b=$("#start");
+ if(S&&S.status=="playing")return toast("Trò chơi đã bắt đầu rồi");
+ if(S&&S.status=="ended")return toast("Đã kết thúc — bấm Xoá tất cả để chơi lại",1);
+ b.className="big busy";b.textContent="⏳ Đang gửi…";
+ const r=await act("start",{auto:$("#auto").checked?1:0,mode:$("#mode").value});
+ if(r&&!r.err&&r.status=="playing"){$("#flash").className="";void $("#flash").offsetWidth;$("#flash").className="go";toast("🎉 Đã bắt đầu! "+(S.mode=="all"?"Mọi người bấm QUAY trên điện thoại":S.auto?"Lượt đầu tiên đã được tạo":"Bấm TẠO LƯỢT để chọn người chơi"))}else show()};
+$("#turn").onclick=async()=>{const r=await act("turn");if(r&&!r.err&&r.turn&&r.turn.phase=="ready")toast("🎲 Đã tạo lượt cho "+r.turn.name);else if(r&&!r.err&&r.status=="ended")toast("🏁 Đã hết các vòng — trò chơi kết thúc")};
+$("#mode").onchange=()=>show();
+$("#skip").onclick=async()=>{const r=await act("skip");if(r&&!r.err)toast("⏭ Đã bỏ lượt")};
+$("#reset").onclick=async()=>{if(confirm("Xoá toàn bộ người chơi và điểm?")){const r=await act("reset");if(r&&!r.err)toast("🗑 Đã xoá tất cả")}};
+
+// ===== Danh sách người chơi (hiện cả khi chưa bắt đầu) =====
+function renderPlayers(){
+  const box=$("#plist");if(!box)return;
+  const L=(S&&S.players)||[];
+  if(!L.length){box.innerHTML=`<div class="pl empty">Chưa có người chơi nào tham gia</div>`;return}
+  const turnPid=(S&&S.turn)?String(S.turn.pid):"";
+  box.innerHTML=L.map(p=>{
+    const me=(S&&S.pl&&S.pl[p.id])?S.pl[p.id]:null;
+    const isTurn=String(p.id)===turnPid;
+    const prog=me?` · câu ${me.n}/${S.per}`:"";
+    return `<div class="pl">
+      <span class="nm">${esc(p.name)}${isTurn?' <span style="color:#f5c542">← đang chơi</span>':''}<br>
+        <span class="meta">${p.score} điểm · ${p.turns} lượt${prog}</span>
+      </span>
+      <button class="big red" data-kick="${esc(p.id)}" title="Xoá người chơi này">❌ Xoá</button>
+    </div>`;
+  }).join("");
+}
+$("#plist").addEventListener("click",async e=>{
+  const btn=e.target.closest("[data-kick]");if(!btn)return;
+  const id=btn.getAttribute("data-kick");
+  const p=(S&&S.players)?S.players.find(x=>String(x.id)===String(id)):null;
+  const name=p?p.name:id;
+  if(!confirm(`Xoá người chơi "${name}" khỏi danh sách?\nThiết bị của người này sẽ tự thoát ngay.`))return;
+  btn.disabled=true;
+  const r=await act("kick",{pid:id});
+  if(r&&!r.err)toast(`🗑 Đã xoá "${name}"`);else btn.disabled=false;
+});
+
+function show(){
+  renderPlayers();
+  if(!S||!S.players)return;
+  renderScore();
+  const t=S.turn,b=$("#start");
+  if(S.status=="playing"){b.className="big done";b.textContent="✅ ĐÃ BẮT ĐẦU";$("#auto").checked=!!S.auto;$("#auto").disabled=true}
+  else if(S.status=="ended"){b.className="big end";b.textContent="🏁 ĐÃ KẾT THÚC";$("#auto").disabled=true}
+  else{b.className="big";b.textContent="▶ BẮT ĐẦU TRÒ CHƠI";$("#auto").disabled=false}
+  const all=S.status=="lobby"?$("#mode").value=="all":S.mode=="all";
+  if(S.status!="lobby")$("#mode").value=S.mode||"seq";$("#mode").disabled=S.status!="lobby";
+  $("#turn").style.display=all?"none":"";$("#auto").parentNode.style.display=all?"none":"";
+  $("#skip").textContent=all?"🏁 KẾT THÚC NGAY":"⏭ BỎ LƯỢT";
+  const sp=S.players.filter(p=>S.pl&&S.pl[p.id]).length,dn=S.players.filter(p=>S.pl&&S.pl[p.id]&&S.pl[p.id].n>=S.per).length;
+  $("#info").innerHTML=`Trạng thái: <b>${S.status=="playing"?"đang chơi":S.status=="ended"?"đã kết thúc":"chờ bắt đầu"}</b> · Người chơi: ${S.players.length}<br>`+(all?(S.status=="lobby"?"Tất cả cùng chơi":`Tất cả cùng chơi · đã quay ${sp}/${S.players.length} · đã xong ${dn}/${S.players.length}`):t?`Lượt #${t.id}: <b>${esc(t.name)}</b> (${t.phase}) · câu ${t.n}/${S.per} · đúng ${t.ok}`:"Chưa có lượt — bấm TẠO LƯỢT")}
+
+async function login(key){const b=$("#lgo"),e=$("#lerr");e.textContent="";b.disabled=true;b.textContent="⏳ Đang kiểm tra…";
+ try{const r=await api("auth",{k:key});
+  if(r.err){e.textContent="❌ "+r.err+" — nhập lại nhé";$("#pw").select();return}
+  K=key;sessionStorage.k=key;$("#login").classList.add("hide");$("#panel").classList.remove("hide");
+  S=r;show();poll(show,2000)}
+ catch(x){e.textContent="⚠️ Không kết nối được máy chủ (kiểm tra mạng)"}
+ finally{b.disabled=false;b.textContent="🔓 VÀO"}}
+$("#lgo").onclick=()=>login($("#pw").value);
+$("#pw").onkeydown=e=>{if(e.key=="Enter")login($("#pw").value)};
+$("#eye").onclick=()=>{const p=$("#pw");p.type=p.type=="password"?"text":"password"};
+$("#out").onclick=()=>{sessionStorage.removeItem("k");location.reload()};
+if(sessionStorage.k)login(sessionStorage.k);else $("#pw").focus();
+</script></body></html>
