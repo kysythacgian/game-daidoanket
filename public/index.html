@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đại đoàn kết</title><link rel="stylesheet" href="style.css">
+<style>
+  #join{text-align:center;padding:24px 16px}
+  #join .logo{width:120px;height:120px;object-fit:contain;display:block;margin:4px auto 6px;
+              filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))}
+  #join h1{margin:6px 0 8px;color:#fff;font-size:clamp(19px,3.4vw,25px);line-height:1.2}
+  #join .slogan{color:#FFFF00;font-size:clamp(18px,4vw,28px);line-height:1.4;margin:10px 0 20px;font-weight:700}
+  #join .slogan b{color:#FFFF00;display:block;font-size:inherit;margin-top:4px;letter-spacing:0;font-weight:700}
+  /* Nút QUAY: đặt trực tiếp trong index để chắc chắn ghi đè CSS cũ */
+  #board button#spin,
+  #spin {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: #ff1e1e !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none;
+    font-weight: 1000 !important;
+    text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff, 0 -1px 0 #fff, 0 3px 5px #000 !important;
+    -webkit-text-stroke: .5px #fff;
+    padding: 0 !important;
+    line-height: 1 !important;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  #spin:disabled { opacity: 1 !important; }
+  #spin:not(:disabled) { animation: spinTextPulse 1.2s infinite; }
+  @keyframes spinTextPulse {
+    50% { text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff, 0 -1px 0 #fff, 0 3px 5px #000, 0 0 12px #ff2020; }
+  }
+</style>
+</head><body>
+<div id="join" class="screen">
+  <img class="logo" src="icon.png" alt="Logo" onerror="this.style.display='none'">
+  <h1>Game "Đại Đoàn Kết"</h1>
+  <p class="slogan">NHIỆT LIỆT CHÀO MỪNG<b>NGÀY HỘI ĐẠI ĐOÀN KẾT TOÀN DÂN TỘC!</b></p>
+  <p id="jmsg" style="color:#FFFF00;margin:0 0 10px;display:none"></p>
+  <input id="nm" maxlength="14" placeholder="Nhập tên của bạn">
+  <button class="big" id="go">THAM GIA</button>
+</div>
+<div id="app" class="hide"><div id="wrap"><div id="board"><img id="car" src="car.svg" alt=""><button id="spin" disabled>QUAY!</button></div></div>
+<div id="side"><div id="msg"></div><div id="score"></div></div></div>
+<div id="ov" class="hide"><div id="card"></div></div>
+<script src="questions.js"></script><script src="common.js"></script>
+<script>
+const Q=window.QUESTIONS;SRC=()=>S.mode=="all"?(S.pl&&S.pl[me]||null):S.turn;let me=localStorage.pid,quizOn=false,doneId=0,chain=Promise.resolve(),decks={};
+function enter(){$("#join").classList.add("hide");$("#app").classList.remove("hide");fit();S={players:[],turn:null,dur:6000};loop();poll(onS)}
+function showJoin(msg,keepName){const j=$("#jmsg");if(msg){j.textContent=msg;j.style.display="block"}
+ try{localStorage.removeItem("pid");if(!keepName)localStorage.removeItem("pname")}catch(e){}
+ me=null;$("#nm").value=keepName&&localStorage.pname||"";$("#join").classList.remove("hide");$("#app").classList.add("hide")}
+$("#go").onclick=async()=>{const name=$("#nm").value.trim();if(!name)return alert("Vui lòng nhập tên");
+ const r=await api("join",{name});if(r.err)return alert(r.err);
+ me=r.me;try{localStorage.pid=me;localStorage.pname=name}catch(e){}
+ if(r.rejoin)alert("👋 Chào mừng bạn quay lại! Đã khôi phục trạng thái của bạn.");enter()};
+try{if(!me)$("#nm").value=localStorage.pname||""}catch(e){}
+// ===== Mở lại trang: kiểm tra trạng thái trên server trước, tránh báo "bị xoá" nhầm =====
+if(me){api("state",{}).then(r=>{
+  if(r&&r.kicked&&r.kicked.indexOf(me)>=0){alert("⚠️ Bạn đã bị quản trò xoá khỏi phòng chơi.");showJoin("",false)}
+  else if(r&&Array.isArray(r.players)&&r.now&&!r.players.some(p=>p.id==me))showJoin("Phòng đã được làm mới. Nhập tên để vào lại.",true);
+  else enter()}).catch(()=>enter())}
+$("#spin").onclick=async()=>{$("#spin").disabled=true;S=await api(S.mode=="all"?"spinme":"spin",{pid:me});onS()};
+function onS(){
+ // ===== Chỉ xử lý khi đã có dữ liệu THẬT từ server (S.now), không dựa vào S khởi tạo rỗng =====
+ if(!S||!S.now||!Array.isArray(S.players))return;
+ if(S.kicked&&S.kicked.indexOf(me)>=0){try{localStorage.removeItem("pid");localStorage.removeItem("pname")}catch(e){}alert("⚠️ Bạn đã bị quản trò xoá khỏi phòng chơi.");return location.reload()}
+ if(!S.players.some(p=>p.id==me)){try{localStorage.removeItem("pid")}catch(e){}return location.reload()}
+ renderScore();const t=S.turn,m=S.players.find(p=>p.id==me);
+ const all=S.mode=="all",o=all&&S.pl&&S.pl[me];
+ if(all){$("#spin").disabled=!(S.status=="playing"&&!o);
+  $("#msg").textContent=S.status=="ended"?"🏆 Kết thúc! Điểm của bạn: "+m.score:!o?(S.status=="playing"?"🎯 Bấm vào vòng tròn giữa để QUAY":"Chờ ban tổ chức bắt đầu…"):
+   !spinDone(S,o)?"🚗 Xe đang chạy…":o.n<S.per?"📝 Đang trả lời câu hỏi…":`Bạn đúng ${o.ok}/${S.per} câu. Chờ mọi người…`;
+  if(o&&spinDone(S,o)&&o.n<S.per&&!quizOn&&doneId!=1)quiz({id:1,region:o.region,n:o.n,banner:1});return}
+ const mine=t&&t.pid==me;$("#spin").disabled=!(mine&&t.phase=="ready"&&S.status=="playing");
+ $("#msg").textContent=S.status=="ended"?"🏆 Kết thúc! Điểm của bạn: "+m.score:!t?(S.status=="playing"?"✅ Đã bắt đầu! Chờ ban tổ chức tạo lượt…":"Chờ ban tổ chức bắt đầu…"):
+  mine&&t.phase=="ready"?"🎯 Đến lượt bạn! Bấm vào vòng tròn giữa để QUAY":
+  mine&&t.phase=="done"?`Bạn đúng ${t.ok}/${S.per} câu. Chờ lượt kế…`:mine?"Xe đang chạy…":"Đang chơi: "+t.name;
+ if(mine&&(t.phase=="spin"||t.phase=="quiz")&&spinDone(S)&&!quizOn&&doneId!=t.id)quiz(t)}
+function quiz(t){quizOn=true;let n=t.n;const r=t.region,per=S.per;
+ function ask(){
+  if(n>=per){doneId=t.id;quizOn=false;chain=chain.then(()=>new Promise(r=>setTimeout(r,5000))).then(()=>api("next",{tid:t.id})).then(s=>{S=s;onS()}).catch(()=>{});return $("#ov").classList.add("hide")}
+  if(!(decks[r]&&decks[r].length))decks[r]=shuf([...Q[r],...Q.chung]);
+  const q=decks[r].pop(),o=shuf(q.a.map((x,i)=>({x,i})));
+  $("#card").innerHTML=`<div class="hd" style="background:${COL[r]}">${NM[r]} · Câu ${n+1}/${per}</div><h2>${esc(q.q)}</h2><div id="opts">`+
+   o.map((y,k)=>`<button class="opt" data-i="${y.i}">${"ABCD"[k]}. ${esc(y.x)}</button>`).join("")+"</div>";
+  $("#ov").classList.remove("hide");
+  if(S.mode!="all"){const qa=o.map(y=>y.x);api("q",{pid:me,n:n,q:q.q,a0:qa[0]||"",a1:qa[1]||"",a2:qa[2]||"",a3:qa[3]||"",c:o.findIndex(y=>y.i==q.c)}).catch(()=>{})}
+  const bs=[...document.querySelectorAll(".opt")];
+  bs.forEach(b=>b.onclick=()=>{const good=+b.dataset.i==q.c;
+   
+   bs.forEach(x=>{x.onclick=null;if(+x.dataset.i==q.c)x.classList.add("ok")});if(!good)b.classList.add("bad");
+   chain=chain.then(()=>api("ans",{pid:me,ok:good?1:0,pick:bs.indexOf(b)})).then(s=>{S=s;onS()}).catch(()=>{});
+   n++;setTimeout(ask,1300)})}
+ if(t.banner){$("#card").innerHTML=`<div class="hd" style="background:${COL[r]}">Kết quả quay</div><img src="${r}.webp" alt="" style="display:block;margin:0 auto 8px;max-height:200px;max-width:100%" onerror="this.remove()"><h2>Bạn đã đến<br><span style="color:${COL[r]}">${NM[r]}</span> 🎉</h2>`;$("#ov").classList.remove("hide");setTimeout(ask,4500)}else ask()}
+</script></body></html>
